@@ -3,15 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-// Клас для таблиці рекордів
 [Serializable]
 public class Record
 {
+    public string playerName; // Додано: зберігання імені гравця (Пункт 8)
     public int maxCoins;
     public float timeOfAttempt;
 }
 
-// Клас для збереження даних у JSON
 [Serializable]
 public class SaveData
 {
@@ -27,9 +26,17 @@ public class GameManager : MonoBehaviour
     // 4. Подія програшу
     public event Action OnLoseEvent;
 
+    // Подія перемоги
+    public event Action OnWinEvent;
+
     [Header("Налаштування рівня")]
     public int startingLives = 3;
     public float levelTimeLimit = 60f; 
+
+    // Додано для UI (Лаб 4)
+    [Header("Стан гри")]
+    public string currentPlayerName; 
+    public bool isGameActive = false; // Блокує таймер і фізику до логіну
 
     // 2. Глобальне сховище параметрів
     [HideInInspector] public int currentLives;
@@ -47,7 +54,7 @@ public class GameManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject); // Зберігаємо об'єкт при перезавантаженні сцен
+            DontDestroyOnLoad(gameObject);
         }
         else
         {
@@ -55,77 +62,85 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // Шлях для збереження JSON файлу
         saveFilePath = Application.persistentDataPath + "/gamedata.json";
         
-        // 5. Підписка обробника події
         OnLoseEvent += HandleLoseEvent;
-
-        LoadData(); // 7. Завантаження даних при запуску
-        ResetLevelData();
+        LoadData(); 
+        
+        // Зверни увагу: я прибрав звідси ResetLevelData(). 
+        // Тепер гра скидається і починається ТІЛЬКИ після введення логіну (метод StartGame).
     }
 
     void Update()
     {
-        if (isGameOver) return;
+        // Таймер працює тільки тоді, коли гра активна і не програна
+        if (!isGameActive || isGameOver) return;
 
-        // Оновлюємо час від запуску рівня
         timeSinceStart += Time.deltaTime;
 
-        // 6. Перевірка обмеження часу
         if (timeSinceStart >= levelTimeLimit)
         {
             TriggerGameOver("Час вийшов!");
         }
     }
 
+    // НОВИЙ МЕТОД: Викликається з UI після введення імені та натискання "Старт" (Пункт 7)
+    public void StartGame(string playerName)
+    {
+        currentPlayerName = playerName;
+        ResetLevelData();
+        isGameActive = true;
+        Debug.Log($"Гру розпочато! Гравець: {currentPlayerName}");
+    }
+
     public void AddCoin()
     {
-        if (isGameOver) return;
+        if (!isGameActive || isGameOver) return;
+        
         collectedCoins++;
         Debug.Log($"Монету зібрано! Всього: {collectedCoins}");
     }
 
     public void LoseLife()
     {
-        if (isGameOver) return;
+        if (!isGameActive || isGameOver) return;
         
         currentLives--;
         collisions++;
         data.totalCollisions = collisions;
         Debug.Log($"Втрачено життя! Залишилось: {currentLives}");
 
-       
         if (currentLives <= 0)
         {
             TriggerGameOver("Закінчилися життя!");
         }
     }
 
-    private void TriggerGameOver(string reason)
+    // Метод тепер публічний, щоб UIManager міг його викликати при фініші
+    public void TriggerGameOver(string reason)
     {
         if (isGameOver) return;
         isGameOver = true;
-        Debug.Log($"Причина програшу: {reason}");
+        isGameActive = false; // Зупиняємо гру
+        Debug.Log($"Причина завершення: {reason}");
         
-        // Додаємо спробу до таблиці рекордів
-        Record newRecord = new Record { maxCoins = collectedCoins, timeOfAttempt = timeSinceStart };
+        // Оновлено: додаємо ім'я гравця до рекорду (Пункт 8)
+        Record newRecord = new Record { 
+            playerName = currentPlayerName, 
+            maxCoins = collectedCoins, 
+            timeOfAttempt = timeSinceStart 
+        };
         data.highScores.Add(newRecord);
         
-        // Викликаємо подію програшу
         OnLoseEvent?.Invoke(); 
-        
-        // 7. Збереження після запису результатів
         SaveData(); 
     }
 
-    // 5. Обробник події, який виводить повідомлення в консоль
     private void HandleLoseEvent()
     {
-        Debug.Log(">>> ПРОГРАШ! Подію оброблено. Гру завершено. <<<");
+        Debug.Log(">>> ГРУ ЗАВЕРШЕНО. Подію оброблено. <<<");
     }
 
-    // 7. Збереження даних у JSON
     private void SaveData()
     {
         string json = JsonUtility.ToJson(data, true);
@@ -133,7 +148,6 @@ public class GameManager : MonoBehaviour
         Debug.Log($"Дані збережено у файл: {saveFilePath}");
     }
 
-    // 7. Завантаження даних з JSON
     private void LoadData()
     {
         if (File.Exists(saveFilePath))
@@ -148,14 +162,41 @@ public class GameManager : MonoBehaviour
     private void ResetLevelData()
     {
         currentLives = startingLives;
+        collisions = 0;
         collectedCoins = 0;
         timeSinceStart = 0f;
         isGameOver = false;
     }
 
-    // Збереження даних при штатному закритті гри
+    // НОВИЙ МЕТОД: Повертає список рекордів для відображення в UI (Пункти 5 і 6)
+    public List<Record> GetHighScores()
+    {
+        return data.highScores;
+    }
+
     private void OnApplicationQuit()
     {
         SaveData();
+    }
+    // Викликається при успішному завершенні рівня
+    public void LevelComplete()
+    {
+        if (isGameOver || !isGameActive) return;
+        
+        isGameOver = true;
+        isGameActive = false;
+        Debug.Log("Рівень пройдено успішно!");
+
+        // Зберігаємо рекорд
+        Record newRecord = new Record { 
+            playerName = currentPlayerName, 
+            maxCoins = collectedCoins, 
+            timeOfAttempt = timeSinceStart 
+        };
+        data.highScores.Add(newRecord);
+        SaveData(); 
+
+        // Викликаємо подію перемоги
+        OnWinEvent?.Invoke();
     }
 }

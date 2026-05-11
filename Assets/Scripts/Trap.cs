@@ -2,14 +2,15 @@ using UnityEngine;
 
 public class Trap : MonoBehaviour
 {
-    private void OnTriggerEnter(Collider other)
+   private void OnTriggerEnter(Collider other)
+{
+    
+    Debug.Log("До пастки доторкнувся: " + other.name); 
+
+    if (other.CompareTag("Player"))
     {
-        
-        if (other.CompareTag("Player"))
-        {
-            GameManager.Instance.LoseLife();
-            // Знищуємо об'єкт пастки, щоб вона не зняла всі життя за одну секунду
-            Destroy(gameObject); 
-        }
+        GameManager.Instance.LoseLife();
+        Destroy(gameObject); 
     }
+}
 }

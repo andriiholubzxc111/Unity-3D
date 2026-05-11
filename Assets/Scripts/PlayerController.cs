@@ -3,21 +3,21 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 public class PlayerController : MonoBehaviour
 {
-    [Header("Рух (Пункти 1, 2)")]
+    [Header("Рух ")]
     public float forwardSpeed = 5f;      
     public float horizontalSpeed = 5f;   
     
-    [Header("Стрибок (Пункт 5)")]
+    [Header("Стрибок")]
     public float jumpForce = 7f;         
     private bool isGrounded = true;     
 
-    [Header("Прискорення (Пункт 7)")]
+    [Header("Прискорення")]
     public float sprintMultiplier = 2f;  
     public float maxSprintTime = 3f;     
     private float currentSprintTime;
     private bool isSprinting = false;
 
-    [Header("Ями та Респаун (Пункт 6)")]
+    [Header("Ями та Респаун ")]
     public float fallThreshold = -2f;    
     private Vector3 startPosition;       
     private Rigidbody rb;
@@ -32,18 +32,23 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        if (gameIsFinished) return; 
+        if (gameIsFinished || (GameManager.Instance != null && !GameManager.Instance.isGameActive)) return; 
 
-        HandleJump();
-        HandleSprint();
-        CheckFall();
-    }
+    HandleJump();
+    HandleSprint();
+    CheckFall();
+}
 
     void FixedUpdate()
+{
+    
+    if (gameIsFinished || (GameManager.Instance != null && !GameManager.Instance.isGameActive)) 
     {
-        if (gameIsFinished) return;
-        HandleMovement();
+        rb.linearVelocity = new Vector3(0, rb.linearVelocity.y, 0); // Зупиняємо рух по осях X та Z
+        return;
     }
+    HandleMovement();
+}
 
     private void HandleMovement()
     {
@@ -120,6 +125,12 @@ public class PlayerController : MonoBehaviour
             Debug.Log("Фініш! Рівень пройдено.");
             gameIsFinished = true; 
             rb.linearVelocity = Vector3.zero;
+
+            // НОВЕ: Повідомляємо GameManager про перемогу
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.LevelComplete();
+            }
         }
     }
 }
